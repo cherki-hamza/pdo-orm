@@ -5,7 +5,7 @@ $dsn = 'mysql:host=localhost;dbname=pdo-orm';
 $username = 'hamza';
 $password = 'root';
 $params = array(
-  PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8',
+  //PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES UTF8',
   PDO::ATTR_ERRMODE => PDO::ERRMODE_WARNING
 );
 

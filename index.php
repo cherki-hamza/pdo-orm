@@ -1,11 +1,10 @@
 <?php
-//ini_set("display_errors", "1");
-//error_reporting(E_ALL);
+session_start();
 
 // db
 require_once ('classes/db.php');
 require_once ('classes/employee.php');
-
+// get language
 $lang = $_GET['lang'];
 if ($lang == 'ar'){
     require_once ('languages/ar.php');
@@ -14,11 +13,9 @@ if ($lang == 'ar'){
 }
 
 
-
-
+// insert new employee or update
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
-     $message = '';
     // get all form data
         $name = filter_input(INPUT_POST , 'name' , FILTER_SANITIZE_STRING);
         $email = filter_input(INPUT_POST , 'email' , FILTER_SANITIZE_EMAIL);
@@ -26,46 +23,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $city = filter_input(INPUT_POST , 'city' , FILTER_SANITIZE_STRING);
         $salary = filter_input(INPUT_POST , 'salary' , FILTER_SANITIZE_NUMBER_INT);
         $tax = filter_input(INPUT_POST , 'tax' , FILTER_SANITIZE_NUMBER_INT);
-        //print_r($name.'<br>'.$email.'<br>'.$country.'<br>'.$city.'<br>'.$salary.'<br>'.$tax);
 
-//    $employee = new Employee($name,$email,$country,$city,$salary,$tax);
-//    $employee = new Employee;
-//    $employee->name = $name;
-//    $employee->email = $email;
-//    $employee->country = $country;
-//    $employee->city = $city;
-//    $employee->salary = $salary;
-//    $employee->tax = $tax;
+            $params = array(
+                ':name'   => $name,
+                ':email'  => $email,
+                ':country'  => $country,
+                ':city'  => $city,
+                ':salary'  => $salary,
+                ':tax'  => $tax
+            );
+     //sql insert statement or update statement
+    if (isset($_GET['action'])  && $_GET['action'] == 'edit' && isset($_GET['id'])) {
+        $id = filter_input(INPUT_GET, 'id', FILTER_SANITIZE_NUMBER_INT);
+        $sql = "UPDATE employee SET name = :name , email = :email ,country = :country , city = :city , salary = :salary , tax = :tax WHERE id = :id";
+        $params[':id'] = $id;
+    }else{
+        $sql = "INSERT INTO employee(name,email,country,city,salary,tax) values (:name ,:email,:country,:city,:salary,:tax)";
+    }
+    $stm = $connect->prepare($sql);
+    $result = $stm->execute($params);
 
-    // sql insert statement
-    $sql_add = "INSERT INTO employee(name,email,country,city,salary,tax,) values (:name ,:email,:country,:city,:salary,:tax)";
-    $stmt_add = $connect->prepare($sql_add);
-
-    $stmt_add->execute(array(
-        ':name'   => $name,
-        ':email'  => $email,
-        ':country'  => $country,
-        ':city'  => $city,
-        ':salary'  => $salary,
-        ':tax'  => $tax
-    ));
-
-    if ($result = $stmt_add->rowCount() == 1){
-        $message ="<span class='text-primary'>the user named $name insert with success</span>";
-
-    }elseif($result = $stmt_add->rowCount() == 0){
-        $message_error = '<span class="text-danger">Oops error DB and sql </span>';
+    if ( $result === true){
+        $_SESSION['message'] ="<span class='text-primary'>the $name saved with success</span>";
+        header('location: index.php');
+        session_write_close();
+        exit();
+    }else{
+        $error = true;
+        $_SESSION['message'] = '<span class="text-danger">Oops error DB and sql </span>';
     }
 
-
 }
+// end post request insert and update *****************************************************************//
 
-// get all employee
+
+
+// get employee by id  ******************************************************************************//
+if (isset($_GET['action'])  && $_GET['action'] === 'edit' && isset($_GET['id']) ){
+    $id = filter_input(INPUT_GET , id , FILTER_SANITIZE_NUMBER_INT);
+    if ($id > 0){
+        $sql_emp_by_id = "SELECT * FROM employee WHERE id = :id";
+        $stmt = $connect->prepare($sql_emp_by_id);
+        $found_emp = $stmt->execute(array(
+            ':id' => $id
+        ));
+        if ($found_emp === true){
+            $emp_by_id = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE,'Employee' , array('name','email','country','city','salary','tax'));
+            $emp_by_id = array_shift($emp_by_id);
+        }
+    }
+}
+//***************************************************************************************************************//
+
+//**  delete  ****************************************************************************************//
+if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])){
+    $id = filter_input(INPUT_GET , 'id' , FILTER_SANITIZE_NUMBER_INT);
+    // delete employee
+    $sql = "DELETE  FROM employee WHERE id=:id";
+    $stm = $connect->prepare($sql);
+    $result = $stm->execute(array('id' => $id));
+    if ($result === true){
+        $_SESSION['message'] = '<span class="text-danger">Employee deleted with success</span>';
+        header('location: index.php');
+        session_write_close();
+        exit();
+    }else{
+        $error = true;
+        $_SESSION['message'] = '<span class="text-danger">Oops error DB or sql the delete not executed </span>';
+    }
+}
+//*************************************************************************************************************//
+
+// get all employee ***********************************************************************************//
 $sql_get = "SELECT * FROM employee";
 $stmt = $connect->prepare($sql_get);
 $stmt->execute();
-$data = $stmt->fetchAll(PDO::FETCH_CLASS , 'Employee');
+$params = array('name','email','country','city','salary','tax');
+$data = $stmt->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, 'Employee' , $params);
 //print_r($data);
+//****************************************************************************************************//
 
 ?>
 <!doctype html>
@@ -75,6 +111,7 @@ $data = $stmt->fetchAll(PDO::FETCH_CLASS , 'Employee');
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
     <link rel="stylesheet" href="assets/css/bootstrap.css">
     <link rel="stylesheet" href="assets/css/all.css">
     <link rel="stylesheet" href="assets/css/style.css">
@@ -134,51 +171,60 @@ $data = $stmt->fetchAll(PDO::FETCH_CLASS , 'Employee');
 
                     <div class="col-md-2">
                     <h3 class="text-success">Add employee</h3>
-                     <form action="<?= $_SERVER['PHP_SELF'] ?>" method="POST">
+                     <form action="" method="POST">
 
-                         <?php if ($result == 1){ ?>
+                         <?php if (isset($_SESSION['message'])){ ?>
                           <div class="form-group">
-                             <?= $message; ?>
+                             <?= $_SESSION['message']; ?>
                           </div>
-                         <?php }elseif($result == 0){ ?>
-                             <div class="form-group">
-                                 <?= $message_error; ?>
-                             </div>
-                         <?php }; ?>
+                         <?php }
+                         $_SESSION['message'] = '';
+                         ?>
 
                           <div class="form-group">
                               <label for="name">Name:</label>
-                              <input type="text" name="name" id="name" class="form-control" placeholder="Writ your name">
+                              <input type="text" name="name" id="name" class="form-control text-success" value="<?= $emp_by_id->name ?>" placeholder="Writ your name">
+                              <input type="hidden" name="id" id="id" value="<?= $emp_by_id->id ?>">
                           </div>
 
                          <div class="form-group">
                              <label for="email">Email:</label>
-                             <input type="email" name="email" id="email" class="form-control" placeholder="Writ your email">
+                             <input type="email" name="email" id="email" class="form-control text-success" value="<?= $emp_by_id->email ?>" placeholder="Writ your email">
                          </div>
 
                          <div class="form-group">
                              <label for="country">Country:</label>
-                             <input type="text" name="country" id="country" class="form-control" placeholder="Writ your country">
+                             <input type="text" name="country" id="country" class="form-control text-success" value="<?= $emp_by_id->country ?>" placeholder="Writ your country">
                          </div>
 
                          <div class="form-group">
                              <label for="city">City:</label>
-                             <input type="text" name="city" id="city" class="form-control" placeholder="Writ your city">
+                             <input type="text" name="city" id="city" class="form-control text-success" value="<?= $emp_by_id->city ?>" placeholder="Writ your city">
                          </div>
 
                          <div class="form-group">
                              <label for="salary">Salary:</label>
-                             <input type="text" name="salary" id="salary" class="form-control" placeholder="Writ your salary">
+                             <input type="text" name="salary" id="salary" class="form-control text-success" value="<?= $emp_by_id->salary ?>" placeholder="Writ your salary">
                          </div>
 
                          <div class="form-group">
                              <label for="tax">Tax:</label>
-                             <input type="number" name="tax" id="tax" class="form-control" placeholder="Writ your tax">
+                             <input type="number" name="tax" id="tax" class="form-control text-success" value="<?= $emp_by_id->tax ?>" placeholder="Writ your tax">
+                         </div>
+                         <div class="form-group offset-2">
+                             <input type="submit" class="btn btn-success" value="Update Employee">
                          </div>
 
-                         <div class="form-group">
-                            <input type="submit" class="btn btn-primary" value="Add Employee">
-                         </div>
+
+<!--                         <div class="form-group offset-2">-->
+<!--                             --><?php //if ($_GET['action'] == 'edit'){
+//                                 echo '<input type="submit" class="btn btn-success" value="Update Employee">';
+//                             }else{
+//                                 echo '<input type="submit" class="btn btn-primary" value="Add Employee">';
+//                             }  ?>
+<!--                         </div>-->
+
+
                      </form>
                     </div>
            <!-- row 1-->
@@ -217,9 +263,9 @@ $data = $stmt->fetchAll(PDO::FETCH_CLASS , 'Employee');
                             <td><?= $row->calculateTax() ?> $ US</td>
                             <td>
                                 <div class="row offset-2">
-                                    <a href="<?= $row->id ?>" class="btn btn-success mr-2">Edit</a>
+                                    <a href="?action=edit&id=<?= $row->id; ?>" class="text-success mr-2">Edit<i class="fas fa-edit ml-1"></i></a>
 
-                                    <a href="<?= $row->id ?>" class="btn btn-danger">Delete</a>
+                                    <a href="?action=delete&id=<?= $row->id; ?>" onclick="if (!confirm('Are you sur to delete this employee')) return false;" class="text-danger">Delete<i class="fas fa-trash ml-1"></i></a>
                                 </div>
                             </td>
                         </tr>
